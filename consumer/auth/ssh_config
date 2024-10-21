@@ -1,0 +1,5 @@
+Host CloudCourse_VM_Group_6
+  HostName 3.249.92.10
+  User ubuntu
+  Port 22
+  IdentityFile ~/.ssh/ssh_key_6
