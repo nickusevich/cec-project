@@ -125,12 +125,12 @@ class DataClient:
             if ((temp < lower_threshold or temp > upper_threshold) and exp_started):
                 print('Reached All')
 
-                self.set_experiment_attr(experiment_id, {f"out_of_range_{timestamp}": {"timestamp": timestamp, "measurement_id": measurement_id, "cipher_data": cipher_data, "AvgTemp": temp}})
+                self.set_experiment_attr(experiment_id, {f"out_of_range_{timestamp}": {"timestamp": timestamp, "measurement_id": measurement_id, "cipher_data": cipher_data, "avg_temp": temp}})
             if (temp < lower_threshold or temp > upper_threshold) and timestamp < oor_timestamp and exp_started:
                 print('Temperature Values : ', temp, lower_threshold, upper_threshold, timestamp, oor_timestamp, exp_started)
 
                 #||||| The below line indicates the measurementID, timestamp, and cipher_data. SHOULD BE NOTIFIED BECAUSE IT IS OUT OF RANGE|||||
-                self.set_experiment_attr(experiment_id, {"out_of_range": {"timestamp": timestamp, "measurement_id": measurement_id, "cipher_data": cipher_data}})
+                self.set_experiment_attr(experiment_id, {"out_of_range": {"timestamp": timestamp, "measurement_id": measurement_id, "cipher_data": cipher_data, "avg_temp": temp}})
     
 
                 self.notify({
