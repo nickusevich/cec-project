@@ -8,7 +8,7 @@ class DataClient:
     def __init__(self):
         self.redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
         self.experiment_data = {} # Key: expermentid, val: list[timestamp: current_data / timestamp etc]
-        self.notify_url = "localhost:3000/api/notify"
+        self.notify_url = "http://localhost:3000/api/notify"
 
     def notify(self, req):
         """
@@ -39,7 +39,7 @@ class DataClient:
 
             # Return the response text for further handling
             return response.text
-        
+
         except Exception as e:
             print(f"Error sending notification: {str(e)}")
             return None  # Return None or some error message
@@ -75,9 +75,9 @@ class DataClient:
         if timestamp not in self.experiment_data[experiment_id]:
             return None
         return self.experiment_data[experiment_id][timestamp]
-    
 
-    
+
+
     def set_experiment_attr(self, experiment_id, mapping):
         """
         Writes to self.experiment_data to the respective experiment's an attribute
@@ -111,7 +111,7 @@ class DataClient:
         upper_threshold = exp_data["upper_threshold"]
         num_sensors = exp_data["num_sensors"]
         exp_started = "start_timestamp" in exp_data
-
+        notif_stab = exp_data["notification_stab"]
         timestamp_data = exp_data[timestamp]
 
         num_measurements = timestamp_data["num_temps"]
@@ -121,17 +121,27 @@ class DataClient:
         else:
             print("Checking temperature")
            # print('Temperature Values : ', temp, lower_threshold, upper_threshold, timestamp, oor_timestamp, exp_started)
+            #print(f'Stabilisation Checkpoint - {temp} - {lower_threshold} - {upper_threshold} - {exp_started} - {notif_stab}')
+            
+            if(temp > lower_threshold and temp < upper_threshold and exp_started is False and notif_stab == 'NotSent'):
+                print(f'Notification for stabilisation to be sent- {measurement_id}- {temp}')
+                self.set_experiment_attr(experiment_id, {"notification_stab": 'Sent'})
+                self.notify({
+                    "notification_type": "Stabilized",
+                    "researcher": "d.landau@uu.nl",
+                    "experiment_id": experiment_id,
+                    "measurement_id": measurement_id,
+                    "cipher_data": cipher_data})
 
             if ((temp < lower_threshold or temp > upper_threshold) and exp_started):
-                print('Reached All')
-
                 self.set_experiment_attr(experiment_id, {f"out_of_range_{timestamp}": {"timestamp": timestamp, "measurement_id": measurement_id, "cipher_data": cipher_data, "avg_temp": temp}})
+
             if (temp < lower_threshold or temp > upper_threshold) and timestamp < oor_timestamp and exp_started:
-                print('Temperature Values : ', temp, lower_threshold, upper_threshold, timestamp, oor_timestamp, exp_started)
+                print('Temperature Values that are out of range : ', temp, lower_threshold, upper_threshold, timestamp, oor_timestamp, exp_started)
 
                 #||||| The below line indicates the measurementID, timestamp, and cipher_data. SHOULD BE NOTIFIED BECAUSE IT IS OUT OF RANGE|||||
                 self.set_experiment_attr(experiment_id, {"out_of_range": {"timestamp": timestamp, "measurement_id": measurement_id, "cipher_data": cipher_data, "avg_temp": temp}})
-    
+
 
                 self.notify({
                     "notification_type": "OutOfRange",
@@ -139,7 +149,7 @@ class DataClient:
                     "experiment_id": experiment_id,
                     "measurement_id": measurement_id,
                     "cipher_data": cipher_data})
-                    
+
     def process(self, message):
         """
         Processes messages>
@@ -186,7 +196,7 @@ class DataClient:
             self.set_experiment_attr(experiment_id, {"num_sensors": num_sensors})
             self.set_experiment_attr(experiment_id, {"researcher": researcher})
 
-        
+
         elif message["name"] == "experiment_started":
             timestamp = message["timestamp"]
             # Bug workaround: Mutates the second 'experiment_started' msg to 'experiment_terminated' and flushes
@@ -206,6 +216,7 @@ class DataClient:
 
         elif message["name"] == "stabilization_started":
             timestamp = message["timestamp"]
+            self.set_experiment_attr(experiment_id, {"notification_stab": 'NotSent'})
             self.set_experiment_attr(experiment_id, {"stabilization_timestamp": timestamp})
 
         else:
