@@ -2,12 +2,14 @@
 COMMANDS: 
 
 docker build -t consumer . 
+
 docker run --network="host" --name consumer -v "$(pwd)/auth":/usr/src/app/auth consumer Consumer.py "group6"
 
 2) after you launched consumer and producer properly, go to "api" folder and type the following commands:
 COMMANDS:
 
 docker build -t api .
+
 docker run --network="host" api
 
 
