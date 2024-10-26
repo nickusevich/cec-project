@@ -8,8 +8,8 @@ class DataClient:
     def __init__(self):
         self.redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
         self.experiment_data = {} # Key: expermentid, val: list[timestamp: current_data / timestamp etc]
-        self.notify_url = "http://localhost:3000/api/notify"
-
+       # self.notify_url = "localhost:3000/api/notify"
+        self.notify_url = "https://notifications-service.cec.4400app.me/api/notify?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3MzY2ODU5OTEsInN1YiI6Imdyb3VwNiJ9.jFde6EfbBzafpQfJ1UiXL9BiXzNSub6uIIu8aQ4BU4LFeUmdF5IOaoFwj046558rIklcoG6MReOhwvAErtZBPdINtLBqe2gXThP4bI-86LWDEsl79p7gDO7JjKGzW_zWoYrsxph7tcC-h3oh6J_9Wj_WJARXEHOIFy-Edu3uzkvUct6DWGyFfNoumL7_OkpeU8x3R-2eSvskLHXyoqiUyMDl0z9XPc6e56UcKLBPNVm0qyLDJxAh7tYv6REQDo5XaGYfRGZNlk6XrKeWLZ8i5ME1mgwuG_hNZng3nQTyqW7tzudebrWbej7JQlYp6mRzCe5tx2p93rjejT1efGMrIQ"
     def notify(self, req):
         """
         Calls the notifier API to notify about out-of-range or stabilized events.
@@ -113,18 +113,16 @@ class DataClient:
         exp_started = "start_timestamp" in exp_data
         notif_stab = exp_data["notification_stab"]
         timestamp_data = exp_data[timestamp]
-
+        within_threshold = exp_data["withinthreshold"]
         num_measurements = timestamp_data["num_temps"]
         temp = timestamp_data["avg_temp"]
         if num_sensors != num_measurements:
             return
         else:
-            print("Checking temperature")
            # print('Temperature Values : ', temp, lower_threshold, upper_threshold, timestamp, oor_timestamp, exp_started)
             #print(f'Stabilisation Checkpoint - {temp} - {lower_threshold} - {upper_threshold} - {exp_started} - {notif_stab}')
-            
             if(temp > lower_threshold and temp < upper_threshold and exp_started is False and notif_stab == 'NotSent'):
-                print(f'Notification for stabilisation to be sent- {measurement_id}- {temp}')
+                print(f'Notification for stabilisation to be sent - {experiment_id}  - {measurement_id} - {temp}')
                 self.set_experiment_attr(experiment_id, {"notification_stab": 'Sent'})
                 self.notify({
                     "notification_type": "Stabilized",
@@ -136,12 +134,10 @@ class DataClient:
             if ((temp < lower_threshold or temp > upper_threshold) and exp_started):
                 self.set_experiment_attr(experiment_id, {f"out_of_range_{timestamp}": {"timestamp": timestamp, "measurement_id": measurement_id, "cipher_data": cipher_data, "avg_temp": temp}})
 
-            if (temp < lower_threshold or temp > upper_threshold) and timestamp < oor_timestamp and exp_started:
-                print('Temperature Values that are out of range : ', temp, lower_threshold, upper_threshold, timestamp, oor_timestamp, exp_started)
-
+            if (temp < lower_threshold or temp > upper_threshold) and exp_started and within_threshold is True:
+                print(f'Temperature Values that are out of range for experiment - {experiment_id} : ', temp, lower_threshold, upper_threshold)
                 #||||| The below line indicates the measurementID, timestamp, and cipher_data. SHOULD BE NOTIFIED BECAUSE IT IS OUT OF RANGE|||||
                 self.set_experiment_attr(experiment_id, {"out_of_range": {"timestamp": timestamp, "measurement_id": measurement_id, "cipher_data": cipher_data, "avg_temp": temp}})
-
 
                 self.notify({
                     "notification_type": "OutOfRange",
@@ -149,6 +145,11 @@ class DataClient:
                     "experiment_id": experiment_id,
                     "measurement_id": measurement_id,
                     "cipher_data": cipher_data})
+
+                self.set_experiment_attr(experiment_id, {"withinthreshold": False})
+            if (temp > lower_threshold and temp < upper_threshold) and exp_started and notif_stab == 'Sent':
+                print('Within threshold being set to True')
+                self.set_experiment_attr(experiment_id, {"withinthreshold": True})
 
     def process(self, message):
         """
@@ -186,11 +187,13 @@ class DataClient:
             self.bounds_check(experiment_id, timestamp, measurement_id, cipher_data)
 
         elif message["name"] == "experiment_configured":
-            print(message)
+            print('<><><><><><<<><<><><<<>><><><><><><><><><>><><><><><><><><><><><><><><><><><><><><><><><><><><><><<>\n')
+            print(f'Experiment Configured for - {experiment_id}')
             upper_threshold = message["temperature_range"]["upper_threshold"]
             lower_threshold = message["temperature_range"]["lower_threshold"]
             researcher = message["researcher"]
             num_sensors = len(message["sensors"])
+            self.set_experiment_attr(experiment_id, {"withinthreshold": True})
             self.set_experiment_attr(experiment_id, {"upper_threshold": upper_threshold})
             self.set_experiment_attr(experiment_id, {"lower_threshold": lower_threshold})
             self.set_experiment_attr(experiment_id, {"num_sensors": num_sensors})
@@ -212,7 +215,8 @@ class DataClient:
             timestamp = message["timestamp"]
             self.set_experiment_attr(experiment_id, {"terminated_timestamp": timestamp})
             self.flush_experiment(experiment_id)
-
+            print(f'Experiment Terminated for - {experiment_id}')
+            print('______________________________________________________________________________________________________\n')
 
         elif message["name"] == "stabilization_started":
             timestamp = message["timestamp"]
@@ -221,4 +225,3 @@ class DataClient:
 
         else:
             print("\t\t" + message["name"])
-
