@@ -5,12 +5,13 @@ import json
 app = FastAPI()
 
 # Initialize Redis client
-redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
+redis_client = redis.StrictRedis(host="redis-service", port=6379, db=0)
+
 
 
 @app.get("/")
 async def home():
-    return {"WELCOME TO TEMPERATURE OBSERVABILITY API"}
+    return {"Welcome to temperature observability API"}
 
 @app.get("/temperature")
 def get_experiment(
@@ -91,3 +92,5 @@ async def get_out_of_range(
         continue
 
     return parsed_measurements
+
+
