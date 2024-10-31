@@ -1,36 +1,42 @@
+import aioredis
 from fastapi import FastAPI, HTTPException, Query
-import redis
 import json
 
 app = FastAPI()
 
-# Initialize Redis client
-redis_client = redis.StrictRedis(host="redis-service", port=6379, db=0)
+# Initialize the Redis client
+redis_client = None
 
+@app.on_event("startup")
+async def startup_event():
+    global redis_client
+    # Using default connection pool settings
+    redis_pool = aioredis.ConnectionPool.from_url(
+        "redis://redis-service:6379")
+    redis_client = aioredis.Redis(connection_pool=redis_pool)
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    if redis_client:
+        await redis_client.close()
 
 @app.get("/")
 async def home():
-    return {"Welcome to temperature observability API"}
+    return {"Welcome to TEMPERATURE OBSERVABILITY API"}
 
 @app.get("/temperature")
-def get_experiment(
+async def get_experiment(
     experiment_id: str = Query(..., alias="experiment-id"),
     start_time: float = Query(..., alias="start-time"),
     end_time: float = Query(..., alias="end-time")
 ):
     # Retrieve the experiment data from Redis
-    experiment_data = redis_client.hgetall(experiment_id)
+    experiment_data = await redis_client.hgetall(experiment_id)
     if not experiment_data:
         raise HTTPException(status_code=404, detail="Experiment not found")
     
-    # Debug log
-    # print(f"Retrieved data for {experiment_id}: {experiment_data}")
-
-    # List to store parsed measurements
     parsed_measurements = []
 
-    # Iterate over the experiment data
     for k, v in experiment_data.items():
         # Ignore non-measurement fields like thresholds, timestamps, and others
         key = k.decode('utf-8')
@@ -57,22 +63,17 @@ def get_experiment(
     # Return the list of measurements as a response
     return parsed_measurements
 
-
-
 @app.get('/temperature/out-of-range')
 async def get_out_of_range(
-    experiment_id: str = Query(..., alias="experiment-id")):
-
-    experiment_data = redis_client.hgetall(experiment_id)
-
+    experiment_id: str = Query(..., alias="experiment-id")
+):
+    experiment_data = await redis_client.hgetall(experiment_id)
+    
     if not experiment_data:
         raise HTTPException(status_code=404, detail="Experiment not found")
-
-    # print(f"Retrieved data for {experiment_id}: {experiment_data}")
-
+    
     parsed_measurements = []
-
-    # Iterate over the experiment data
+    
     for k, v in experiment_data.items():
         key = k.decode('utf-8')
 
@@ -92,5 +93,4 @@ async def get_out_of_range(
         continue
 
     return parsed_measurements
-
 
